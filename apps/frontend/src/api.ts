@@ -38,3 +38,16 @@ export function createTable(input: Omit<Table, 'id'>): Promise<Table> {
     .then((r) => r.json())
     .then((data) => tableSchema.parse(data))
 }
+
+
+export function getAIAssistance(payload: any) {
+  return fetch(`https://rlbot-svc.prod.kashxa-infra.com/act`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': 'dc929e5e5e6d83784baa294a1819dfe1',
+    },
+    body: payload 
+  })
+    .then((r) => r.json())
+}
