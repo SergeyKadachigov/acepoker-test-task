@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
+import { computed, ref, watch } from 'vue'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import LoadingIndicator from '../components/LoadingIndicator.vue'
 import PokerCard from '../components/PokerCard.vue'
 import { getTable } from '../api'
@@ -9,10 +9,19 @@ const props = defineProps<{
   id: number
 }>()
 
+const queryClient = useQueryClient()
+
 const { data: table, isPending } = useQuery({
   queryKey: ['table', props.id],
   queryFn: () => getTable(props.id),
   refetchInterval: 1000
+})
+
+watch(() => props.id, (next, prev) => {
+  if (next !== prev) {
+    // Invalidate the current query to force a refetch
+    queryClient.invalidateQueries({ queryKey: ['table'] })
+  }
 })
 </script>
 <template>
