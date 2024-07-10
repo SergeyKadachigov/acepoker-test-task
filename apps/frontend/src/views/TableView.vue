@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import LoadingIndicator from '../components/LoadingIndicator.vue'
 import PokerCard from '../components/PokerCard.vue'
-import { getTable } from '../api'
+import { getTable, getAIAssistance } from '../api'
+import { CardGroup, OddsCalculator } from "poker-tools";
 
 const props = defineProps<{
   id: number
@@ -14,6 +15,84 @@ const { data: table, isPending } = useQuery({
   queryFn: () => getTable(props.id),
   refetchInterval: 1000
 })
+
+const calculateState = () => {
+  const holeCards = table.value?.holeCards.map(cards => cards?.join('')).join('|');
+  const stackSizes = table.value?.holeCards.map(() => 1000).join('|');
+
+  return `:${holeCards}:${stackSizes}`;
+}
+
+function encodeObjectForURLQuery(obj: Record<string, any>) {
+  return Object.keys(obj).map(key => 
+    `${encodeURIComponent(key)}=${encodeURIComponent(obj[key])}`
+  ).join('&');
+}
+
+const handleAssistance = async () => {
+  const encodedURLQuery = encodeObjectForURLQuery({
+    format: '3blinds-ante',
+    state: calculateState(),
+  });
+
+  try {
+    const res = await getAIAssistance(encodedURLQuery);
+    if (res.msg !== 'success') {
+      showErrorMessage();
+      return;
+    }
+
+    showResult(findHighestStrategy(res.strategy));
+  } catch (error) {
+    showErrorMessage();
+  }
+}
+
+function findHighestStrategy(strategyObject: Record<string, number>): string {
+  let highestStrategy = '';
+  let highestProbability = -1;
+
+  Object.entries(strategyObject).forEach(([strategy, probability]) => {
+    if (probability > highestProbability) {
+      highestProbability = probability;
+      highestStrategy = strategy;
+    }
+  });
+
+  return highestStrategy;
+}
+
+const showErrorMessage = () => {
+  alert('Unable to assist you')
+}
+
+const showResult = (strategy: string) => {
+  alert(`Suggested strategy: "${strategy}"`)
+} 
+
+watch(table, () => {
+  if (table.value?.communityCards.length === 5) {
+    winnerPrediction();
+  }
+});
+
+function winnerPrediction() {
+  const board = CardGroup.fromString(table.value?.communityCards.join(''));
+
+  const playersCards = table.value?.holeCards.map((item) =>
+    CardGroup.fromString(item?.join('') || '')
+  );
+
+  const currentData = OddsCalculator.calculateEquity(playersCards, board);
+
+  table.value?.holeCards.forEach((item, index) => {
+    console.log(`Player #${index + 1} - ${currentData.equities[index].getEquity()}%`);
+  });
+
+  const winResult = OddsCalculator.calculateWinner(playersCards, board);
+
+  console.log('win => ', winResult);
+}
 </script>
 <template>
   <div class="p-2">
@@ -30,7 +109,7 @@ const { data: table, isPending } = useQuery({
           >
             <template v-if="index === 1">
               <div class="absolute top-0 right-0 z-10 leading-[0]">
-                <button class="bg-blue-500 text-white p-1 text-xs rounded-tr-lg rounded-bl-lg">
+                <button @click="handleAssistance" class="bg-blue-500 text-white p-1 text-xs rounded-tr-lg rounded-bl-lg">
                   Ask AI
                 </button>
               </div>
